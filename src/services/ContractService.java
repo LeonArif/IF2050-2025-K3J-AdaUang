@@ -1,12 +1,12 @@
 package services;
 
-import models.Contract;
 import java.util.List;
+import models.Contract;
 
 public class ContractService {
     
     public List<Contract> getAllContracts() {
-        return Contract.findAllWithUserDetails();
+        return Contract.findAll();
     }
     
     public boolean createContract(String namaUser, int total, int tenor, int idUser) {

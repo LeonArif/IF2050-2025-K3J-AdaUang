@@ -6,6 +6,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import models.Cicilan; 
+import models.Contract; // Pastikan Contract di-import
 
 public class InstalmentService {
     private final DatabaseConnection dbConnection;
@@ -16,124 +17,64 @@ public class InstalmentService {
 
     public boolean addCicilan(int idKontrak, int jumlah, int tenor, LocalDate tanggal, int idStaff) {
         Connection conn = dbConnection.getConnection();
-
+        
         try {
-            // 1. Validasi kontrak dan ambil data
-            String queryKontrak = "SELECT jumlah_bayar, jumlah_bayar_bunga, total, cicilan_per_bulan, tenor FROM kontrak WHERE id_kontrak = ?";
-            int jumlahBayarSebelumnya = 0;
-            int jumlahBayarTotal = 0;
-            int totalPinjaman = 0;
-            int cicilanPerBulan = 0;
-            int tenorMaksimal = 0; // Tambahan untuk tenor maksimal
-
-            try (PreparedStatement stmt = conn.prepareStatement(queryKontrak)) {
-                stmt.setInt(1, idKontrak);
-                ResultSet rs = stmt.executeQuery();
-                if (rs.next()) {
-                    jumlahBayarSebelumnya = rs.getInt("jumlah_bayar");
-                    jumlahBayarTotal = rs.getInt("jumlah_bayar_bunga");
-                    totalPinjaman = rs.getInt("total");
-                    cicilanPerBulan = rs.getInt("cicilan_per_bulan");
-                    tenorMaksimal = rs.getInt("tenor"); // Ambil tenor maksimal dari kontrak
-                } else {
-                    System.err.println("Tidak ditemukan kontrak dengan ID: " + idKontrak);
-                    return false;
+            System.out.println("Starting addCicilan: kontrak=" + idKontrak + ", jumlah=" + jumlah + ", tenor=" + tenor);
+            
+            // Cek apakah tenor sudah pernah dibayar
+            String checkSql = "SELECT COUNT(*) FROM cicilan WHERE id_kontrak = ? AND tenor = ?";
+            try (PreparedStatement checkStmt = conn.prepareStatement(checkSql)) {
+                checkStmt.setInt(1, idKontrak);
+                checkStmt.setInt(2, tenor);
+                
+                try (ResultSet rs = checkStmt.executeQuery()) {
+                    if (rs.next() && rs.getInt(1) > 0) {
+                        System.out.println("Tenor " + tenor + " sudah pernah dibayar untuk kontrak " + idKontrak);
+                        return false;
+                    }
                 }
             }
-
-            // 2. Validasi tenor tidak melebihi tenor maksimal kontrak
-            if (tenor > tenorMaksimal) {
-                System.err.println("INVALID: Tenor melebihi batas maksimal!");
-                System.err.println("Tenor maksimal untuk kontrak ini: " + tenorMaksimal);
-                System.err.println("Tenor yang dimasukkan: " + tenor);
-                return false;
-            }
-
-            // 3. Validasi apakah tenor sudah pernah dibayar
-            String queryTenor = "SELECT COUNT(*) FROM cicilan WHERE id_kontrak = ? AND tenor = ?";
-            try (PreparedStatement stmt = conn.prepareStatement(queryTenor)) {
-                stmt.setInt(1, idKontrak);
-                stmt.setInt(2, tenor);
-                ResultSet rs = stmt.executeQuery();
-                if (rs.next() && rs.getInt(1) > 0) {
-                    System.err.println("INVALID: Tenor ke-" + tenor + " untuk kontrak ID " + idKontrak + " sudah pernah dibayar!");
-                    return false;
+            
+            System.out.println("Tenor belum pernah dibayar, melanjutkan insert...");
+            
+            // Insert cicilan baru
+            String insertSql = "INSERT INTO cicilan (id_kontrak, tenor, jumlah_cicilan, tanggal_cicilan, id_staff) VALUES (?, ?, ?, ?, ?)";
+            try (PreparedStatement insertStmt = conn.prepareStatement(insertSql)) {
+                insertStmt.setInt(1, idKontrak);
+                insertStmt.setInt(2, tenor);
+                insertStmt.setInt(3, jumlah);
+                insertStmt.setDate(4, java.sql.Date.valueOf(tanggal));
+                insertStmt.setInt(5, idStaff);
+                
+                int insertResult = insertStmt.executeUpdate();
+                System.out.println("Insert cicilan result: " + insertResult);
+                
+                if (insertResult > 0) {
+                    // Update jumlah_bayar di tabel kontrak
+                    String updateKontrakSql = "UPDATE kontrak SET jumlah_bayar = jumlah_bayar + ? WHERE id_kontrak = ?";
+                    try (PreparedStatement updateStmt = conn.prepareStatement(updateKontrakSql)) {
+                        updateStmt.setInt(1, jumlah);
+                        updateStmt.setInt(2, idKontrak);
+                        
+                        int updateResult = updateStmt.executeUpdate();
+                        System.out.println("Update kontrak result: " + updateResult);
+                        
+                        if (updateResult > 0) {
+                            updateKontrakStatusIfComplete(idKontrak);
+                            System.out.println("Cicilan berhasil ditambahkan untuk kontrak " + idKontrak);
+                            return true;
+                        }
+                    }
                 }
             }
-
-            // 4. Validasi urutan tenor (harus tenor terakhir + 1)
-            String queryTenorTerakhir = "SELECT COALESCE(MAX(tenor), 0) FROM cicilan WHERE id_kontrak = ?";
-            int tenorTerakhir = 0;
-            try (PreparedStatement stmt = conn.prepareStatement(queryTenorTerakhir)) {
-                stmt.setInt(1, idKontrak);
-                ResultSet rs = stmt.executeQuery();
-                if (rs.next()) {
-                    tenorTerakhir = rs.getInt(1);
-                }
-            }
-
-            int tenorYangHarusDibayar = tenorTerakhir + 1;
-            if (tenor != tenorYangHarusDibayar) {
-                System.err.println("INVALID: Tenor harus dibayar secara berurutan!");
-                System.err.println("Tenor terakhir yang dibayar: " + tenorTerakhir);
-                System.err.println("Tenor yang harus dibayar sekarang: " + tenorYangHarusDibayar);
-                System.err.println("Tenor yang dimasukkan: " + tenor);
-                return false;
-            }
-
-            // 5. Validasi apakah kontrak sudah lunas (semua tenor telah dibayar)
-            if (tenorTerakhir >= tenorMaksimal) {
-                System.err.println("INVALID: Kontrak sudah lunas!");
-                System.err.println("Semua tenor (1-" + tenorMaksimal + ") sudah dibayar.");
-                return false;
-            }
-
-            // 6. Validasi jumlah cicilan
-            if (jumlah != cicilanPerBulan) {
-                System.err.println("INVALID: Jumlah cicilan tidak sesuai!");
-                System.err.println("Jumlah yang dimasukkan: " + jumlah);
-                System.err.println("Jumlah cicilan yang seharusnya: " + cicilanPerBulan);
-                return false;
-            }
-
-            // 7. Update jumlah_bayar di kontrak (MENAMBAHKAN jumlah cicilan)
-            int jumlahBaru = jumlahBayarSebelumnya + jumlah;
             
-            // Cek status: jika jumlah bayar >= total pinjaman maka lunas (1), jika belum maka aktif (0)
-            boolean statusLunas = jumlahBaru >= totalPinjaman;
-            int statusValue = statusLunas ? 1 : 0;
-            
-            String updateKontrak = "UPDATE kontrak SET jumlah_bayar = ?, status = ? WHERE id_kontrak = ?";
-            try (PreparedStatement stmt = conn.prepareStatement(updateKontrak)) {
-                stmt.setInt(1, jumlahBaru);
-                stmt.setInt(2, statusValue); // 1 = lunas, 0 = belum lunas
-                stmt.setInt(3, idKontrak);
-                stmt.executeUpdate();
-            }
-
-            // 8. Insert ke tabel cicilan
-            String insertCicilan = "INSERT INTO cicilan (id_kontrak, tenor, jumlah_cicilan, tanggal_cicilan, id_staff) VALUES (?, ?, ?, ?, ?)";
-            try (PreparedStatement stmt = conn.prepareStatement(insertCicilan)) {
-                stmt.setInt(1, idKontrak);
-                stmt.setInt(2, tenor);
-                stmt.setInt(3, jumlah);
-                stmt.setDate(4, Date.valueOf(tanggal));
-                stmt.setInt(5, idStaff);
-                stmt.executeUpdate();
-            }
-
-            if (statusLunas) {
-                System.out.println("Selamat! Kontrak telah LUNAS. Total terbayar: " + jumlahBaru + " dari total pinjaman: " + totalPinjaman);
-            } else {
-                System.out.println("Cicilan berhasil ditambahkan. Jumlah bayar sekarang: " + jumlahBaru + " dari total pinjaman: " + totalPinjaman);
-            }
-            
-            return true;
-
         } catch (SQLException e) {
+            System.err.println("Error menambahkan cicilan: " + e.getMessage());
             e.printStackTrace();
-            return false;
         }
+        
+        System.out.println("AddCicilan gagal untuk kontrak " + idKontrak);
+        return false;
     }
 
     public List<Cicilan> getAllCicilan() {
@@ -168,5 +109,143 @@ public class InstalmentService {
         }
         
         return cicilanList;
+    }
+
+    /**
+     * Ambil semua cicilan untuk kontrak tertentu
+     */
+    public List<Cicilan> getCicilanByKontrak(int idKontrak) {
+        List<Cicilan> cicilanList = new ArrayList<>();
+        Connection conn = dbConnection.getConnection();
+        
+        try {
+            String sql = "SELECT * FROM cicilan WHERE id_kontrak = ? ORDER BY tenor ASC";
+            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                stmt.setInt(1, idKontrak);
+                
+                try (ResultSet rs = stmt.executeQuery()) {
+                    while (rs.next()) {
+                        Cicilan cicilan = new Cicilan(
+                            rs.getInt("id_cicilan"),
+                            rs.getInt("id_kontrak"),
+                            rs.getInt("tenor"),
+                            rs.getInt("jumlah_cicilan"),
+                            rs.getDate("tanggal_cicilan").toLocalDate(),
+                            rs.getInt("id_staff")
+                        );
+                        cicilanList.add(cicilan);
+                    }
+                }
+            }
+            
+            System.out.println("Found " + cicilanList.size() + " cicilan records for kontrak ID: " + idKontrak);
+            
+        } catch (SQLException e) {
+            System.err.println("Error mengambil data cicilan by kontrak: " + e.getMessage());
+            e.printStackTrace();
+        }
+        
+        return cicilanList;
+    }
+
+    /**
+     * Ambil tenor terakhir yang sudah dibayar untuk kontrak tertentu
+     */
+    public int getLastTenor(int idKontrak) {
+        Connection conn = dbConnection.getConnection();
+        
+        try {
+            String sql = "SELECT COALESCE(MAX(tenor), 0) as tenor_terakhir FROM cicilan WHERE id_kontrak = ?";
+            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                stmt.setInt(1, idKontrak);
+                
+                try (ResultSet rs = stmt.executeQuery()) {
+                    if (rs.next()) {
+                        return rs.getInt("tenor_terakhir");
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("Error mengambil tenor terakhir: " + e.getMessage());
+            e.printStackTrace();
+        }
+        
+        return 0; // Default jika belum ada pembayaran
+    }
+
+    /**
+     * Cek apakah tenor sudah pernah dibayar
+     */
+    public boolean isTenorlreadyPaid(int idKontrak, int tenor) {
+        Connection conn = dbConnection.getConnection();
+        
+        try {
+            String sql = "SELECT COUNT(*) FROM cicilan WHERE id_kontrak = ? AND tenor = ?";
+            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                stmt.setInt(1, idKontrak);
+                stmt.setInt(2, tenor);
+                
+                try (ResultSet rs = stmt.executeQuery()) {
+                    if (rs.next()) {
+                        return rs.getInt(1) > 0;
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("Error checking tenor payment: " + e.getMessage());
+            e.printStackTrace();
+        }
+        
+        return false;
+    }
+
+
+    public boolean updateKontrakStatusIfComplete(int idKontrak) {
+        try {
+            // Ambil data kontrak
+            Contract contract = Contract.findById(idKontrak);
+            if (contract == null) return false;
+            
+            // Hitung total cicilan yang sudah dibayar
+            String sql = "SELECT COUNT(*) as total_terbayar FROM cicilan WHERE id_kontrak = ?";
+            try (Connection conn = dbConnection.getConnection();
+                 PreparedStatement stmt = conn.prepareStatement(sql)) {
+                
+                stmt.setInt(1, idKontrak);
+                try (ResultSet rs = stmt.executeQuery()) {
+                    if (rs.next()) {
+                        int totalTerbayar = rs.getInt("total_terbayar");
+                        
+                        // Jika sudah terbayar semua, ubah status jadi lunas
+                        if (totalTerbayar >= contract.getTenor()) {
+                            return updateKontrakStatusToLunas(idKontrak);
+                        }
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("Error checking contract completion: " + e.getMessage());
+            e.printStackTrace();
+        }
+        return false;
+    }
+
+    private boolean updateKontrakStatusToLunas(int idKontrak) {
+        String sql = "UPDATE kontrak SET status = 0 WHERE id_kontrak = ?"; // Ubah jadi 0
+        try (Connection conn = dbConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            
+            stmt.setInt(1, idKontrak);
+            int result = stmt.executeUpdate();
+            
+            if (result > 0) {
+                System.out.println("Kontrak " + idKontrak + " berubah status menjadi INACTIVE (LUNAS)");
+                return true;
+            }
+        } catch (SQLException e) {
+            System.err.println("Error updating contract status: " + e.getMessage());
+            e.printStackTrace();
+        }
+        return false;
     }
 }

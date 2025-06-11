@@ -88,9 +88,11 @@ public class DatabaseSeeder {
 
         try (PreparedStatement stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             Object[][] testContracts = {
-                    {"Budi Santoso", 12000000, 12, 1000000, true, LocalDate.of(2024, 12, 1), 1},
-                    {"Siti Aminah", 48000000, 24, 2000000, true, LocalDate.of(2024, 11, 15), 2},
-                    {"Agus Wijaya", 6000000, 6, 1000000, true, LocalDate.of(2025, 1, 10), 3}
+                    {"Budi Santoso", 12000000, 12, 13200000, false, LocalDate.of(2024, 1, 1), 3},   
+                    {"Siti Aminah", 24000000, 24, 11000000, true, LocalDate.of(2024, 8, 15), 4},   
+                    {"Agus Wijaya", 6000000, 6, 6600000, false, LocalDate.of(2024, 5, 10), 3},     
+                    {"Aziz Marsha", 15000000, 15, 8800000, true, LocalDate.of(2024, 10, 5), 4},   
+                    {"Maya Putri", 18000000, 18, 6600000, true, LocalDate.of(2024, 9, 20), 3}       
             };
 
             for (Object[] kontrak : testContracts) {
@@ -125,64 +127,79 @@ public class DatabaseSeeder {
         String sql = "INSERT INTO cicilan (id_kontrak, tenor, jumlah_cicilan, tanggal_cicilan, id_staff) VALUES (?, ?, ?, ?, ?)";
         try (PreparedStatement stmt = dbConnection.getConnection().prepareStatement(sql)) {
 
-            // Kontrak Budi - sudah bayar semua 12 tenor (LUNAS)
+            // Kontrak Budi - LUNAS (12/12 tenor selesai) - cicilan 1.100.000
             int idKontrakBudi = 1;
             int jumlahCicilanBudi = 1100000;
             int totalTenorBudi = 12;
             int idStaffBudi = 1;
-            LocalDate mulaiBudi = LocalDate.of(2024, 12, 1);
+            LocalDate mulaiBudi = LocalDate.of(2024, 1, 1);
 
             for (int i = 0; i < totalTenorBudi; i++) {
                 stmt.setInt(1, idKontrakBudi);
-                stmt.setInt(2, i + 1); // Tenor ke-1, ke-2, ke-3, ..., ke-12
+                stmt.setInt(2, i + 1); 
                 stmt.setInt(3, jumlahCicilanBudi);
                 stmt.setDate(4, Date.valueOf(mulaiBudi.plusMonths(i)));
                 stmt.setInt(5, idStaffBudi);
                 stmt.executeUpdate();
             }
 
-            // Kontrak Siti - baru bayar 3 tenor dari total 24 tenor
+            // Kontrak Siti - AKTIF (10/24 tenor terbayar) - cicilan 1.100.000
             int idKontrakSiti = 2;
-            int jumlahCicilanSiti = 2200000;
+            int jumlahCicilanSiti = 1100000;
             int idStaffSiti = 2;
+            LocalDate mulaiSiti = LocalDate.of(2024, 8, 15);
 
-            // Tenor ke-1
-            stmt.setInt(1, idKontrakSiti);
-            stmt.setInt(2, 1); // Tenor ke-1
-            stmt.setInt(3, jumlahCicilanSiti);
-            stmt.setDate(4, Date.valueOf(LocalDate.of(2024, 11, 15)));
-            stmt.setInt(5, idStaffSiti);
-            stmt.executeUpdate();
+            for (int i = 0; i < 10; i++) {
+                stmt.setInt(1, idKontrakSiti);
+                stmt.setInt(2, i + 1);
+                stmt.setInt(3, jumlahCicilanSiti);
+                stmt.setDate(4, Date.valueOf(mulaiSiti.plusMonths(i)));
+                stmt.setInt(5, idStaffSiti);
+                stmt.executeUpdate();
+            }
 
-            // Tenor ke-2
-            stmt.setInt(1, idKontrakSiti);
-            stmt.setInt(2, 2); // Tenor ke-2
-            stmt.setInt(3, jumlahCicilanSiti);
-            stmt.setDate(4, Date.valueOf(LocalDate.of(2024, 12, 15)));
-            stmt.setInt(5, idStaffSiti);
-            stmt.executeUpdate();
-
-            // Tenor ke-3
-            stmt.setInt(1, idKontrakSiti);
-            stmt.setInt(2, 3); // Tenor ke-3
-            stmt.setInt(3, jumlahCicilanSiti);
-            stmt.setDate(4, Date.valueOf(LocalDate.of(2025, 1, 15)));
-            stmt.setInt(5, idStaffSiti);
-            stmt.executeUpdate();
-
-            // Kontrak Agus - sudah bayar semua 6 tenor (LUNAS)
+            // Kontrak Agus - LUNAS (6/6 tenor selesai) - cicilan 1.100.000
             int idKontrakAgus = 3;
             int jumlahCicilanAgus = 1100000;
             int totalTenorAgus = 6;
             int idStaffAgus = 3;
-            LocalDate mulaiAgus = LocalDate.of(2025, 1, 10);
+            LocalDate mulaiAgus = LocalDate.of(2024, 5, 10);
 
             for (int i = 0; i < totalTenorAgus; i++) {
                 stmt.setInt(1, idKontrakAgus);
-                stmt.setInt(2, i + 1); // Tenor ke-1, ke-2, ke-3, ke-4, ke-5, ke-6
+                stmt.setInt(2, i + 1);
                 stmt.setInt(3, jumlahCicilanAgus);
                 stmt.setDate(4, Date.valueOf(mulaiAgus.plusMonths(i)));
                 stmt.setInt(5, idStaffAgus);
+                stmt.executeUpdate();
+            }
+
+            // Kontrak Aziz - AKTIF (8/15 tenor terbayar) - cicilan 1.100.000
+            int idKontrakAziz = 4;
+            int jumlahCicilanAziz = 1100000;
+            int idStaffAziz = 4;
+            LocalDate mulaiAziz = LocalDate.of(2024, 10, 5);
+
+            for (int i = 0; i < 8; i++) {
+                stmt.setInt(1, idKontrakAziz);
+                stmt.setInt(2, i + 1);
+                stmt.setInt(3, jumlahCicilanAziz);
+                stmt.setDate(4, Date.valueOf(mulaiAziz.plusMonths(i)));
+                stmt.setInt(5, idStaffAziz);
+                stmt.executeUpdate();
+            }
+
+            int idKontrakMaya = 5;
+            int jumlahCicilanMaya = 1100000;
+            int idStaffMaya = 3; 
+            LocalDate mulaiMaya = LocalDate.of(2024, 9, 20);
+
+            for (int i = 0; i < 6; i++) {
+                stmt.setInt(1, idKontrakMaya);
+                stmt.setInt(2, i + 1);
+                stmt.setInt(3, jumlahCicilanMaya);
+                stmt.setDate(4, Date.valueOf(mulaiMaya.plusMonths(i)));
+                stmt.setInt(5, idStaffMaya);
                 stmt.executeUpdate();
             }
         }

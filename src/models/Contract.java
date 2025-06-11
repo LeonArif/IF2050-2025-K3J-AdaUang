@@ -88,10 +88,11 @@ public class Contract extends BaseModel {
         return id_kontrak == 0;
     }
 
-    public static List<Contract> findAllWithUserDetails() {
+    public static List<Contract> findAll() {
         List<Contract> contracts = new ArrayList<>();
         String sql = "SELECT k.*, u.username, u.branch FROM kontrak k " +
-                "JOIN users u ON k.id_user = u.id_user ORDER BY k.id_kontrak ASC";
+                "JOIN users u ON k.id_user = u.id_user " +
+                "ORDER BY k.id_kontrak DESC";
 
         try (Connection conn = dbConnection.getConnection();
              Statement stmt = conn.createStatement();
@@ -101,6 +102,7 @@ public class Contract extends BaseModel {
                 contracts.add(createFromResultSet(rs));
             }
         } catch (SQLException e) {
+            System.err.println("Error loading all contracts: " + e.getMessage());
             e.printStackTrace();
         }
         return contracts;
@@ -154,6 +156,122 @@ public class Contract extends BaseModel {
     }
 }
 
+    /**
+     * Ambil semua kontrak yang masih aktif (belum lunas)
+     */
+    public static List<Contract> findAllAktif() {
+        List<Contract> contracts = new ArrayList<>();
+        String sql = "SELECT k.*, u.username, u.branch FROM kontrak k " +
+                "JOIN users u ON k.id_user = u.id_user " +
+                "WHERE k.status = 0 " + // 0 = belum lunas
+                "ORDER BY k.id_kontrak DESC"; // DESC untuk yang terbaru di atas
+
+        try (Connection conn = dbConnection.getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+
+            while (rs.next()) {
+                contracts.add(createFromResultSet(rs));
+            }
+        } catch (SQLException e) {
+            System.err.println("Error loading active contracts: " + e.getMessage());
+            e.printStackTrace();
+        }
+        return contracts;
+    }
+
+    /**
+     * Update status kontrak dan jumlah bayar
+     */
+    public boolean updatePayment(int newJumlahBayar, boolean isLunas) {
+        this.jumlah_bayar = newJumlahBayar;
+        this.status = isLunas;
+        
+        String sql = "UPDATE kontrak SET jumlah_bayar = ?, status = ? WHERE id_kontrak = ?";
+        try (Connection conn = getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            
+            stmt.setInt(1, this.jumlah_bayar);
+            stmt.setBoolean(2, this.status);
+            stmt.setInt(3, this.id_kontrak);
+            
+            return stmt.executeUpdate() > 0;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    /**
+     * Cek apakah kontrak sudah lunas berdasarkan jumlah tenor yang sudah dibayar
+     */
+    public boolean isLunasByTenor() {
+        String sql = "SELECT COUNT(*) as jumlah_tenor_terbayar FROM cicilan WHERE id_kontrak = ?";
+        try (Connection conn = dbConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            
+            stmt.setInt(1, this.id_kontrak);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    int tenorTerbayar = rs.getInt("jumlah_tenor_terbayar");
+                    return tenorTerbayar >= this.tenor; // Jika tenor terbayar >= tenor maksimal
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+
+    /**
+     * Hitung tenor selanjutnya yang harus dibayar
+     */
+    public int getNextTenor() {
+        String sql = "SELECT COALESCE(MAX(tenor), 0) as tenor_terakhir FROM cicilan WHERE id_kontrak = ?";
+        try (Connection conn = dbConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            
+            stmt.setInt(1, this.id_kontrak);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    int tenorTerakhir = rs.getInt("tenor_terakhir");
+                    return tenorTerakhir + 1; // Tenor selanjutnya
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return 1; // Default tenor pertama
+    }
+
+    /**
+     * Getter untuk nama peminjam (alias untuk nama_user)
+     */
+    public String getNamaPeminjam() {
+        return this.nama_user;
+    }
+
+    /**
+     * Getter untuk ID kontrak (alias)
+     */
+    public int getIdKontrak() {
+        return this.id_kontrak;
+    }
+
+    /**
+     * Format currency untuk cicilan per bulan
+     */
+    public String getFormattedCicilanPerBulan() {
+        return NumberFormat.getCurrencyInstance(new Locale("id", "ID")).format(this.cicilan_per_bulan);
+    }
+
+    /**
+     * Get status sebagai string
+     */
+    public String getStatusText() {
+        return this.status ? "Lunas" : "Aktif";
+    }
+
     // Getters and Setters
     public String getFormattedTotal() {
         return NumberFormat.getCurrencyInstance(new Locale("id", "ID")).format(this.total);
@@ -176,8 +294,13 @@ public class Contract extends BaseModel {
     }
     public int getJumlah_bayar_bunga() { return jumlah_bayar_bunga; }
     public void setJumlah_bayar_bunga(int jumlah_bayar_bunga) { this.jumlah_bayar_bunga = jumlah_bayar_bunga; }
-    public int getCicilan_per_bulan() { return cicilan_per_bulan; }
-    public void setCicilan_per_bulan(int cicilan_per_bulan) { this.cicilan_per_bulan = cicilan_per_bulan; }
+    public int getCicilan_per_bulan() { 
+        return cicilan_per_bulan; 
+    }
+
+    public void setCicilan_per_bulan(int cicilan_per_bulan) { 
+        this.cicilan_per_bulan = cicilan_per_bulan; 
+    }
     public boolean isStatus() { return status; }
     public void setStatus(boolean status) { this.status = status; }
     public Date getTanggal_pinjam() { return tanggal_pinjam; }
@@ -188,4 +311,18 @@ public class Contract extends BaseModel {
     public void setUsername(String username) { this.username = username; }
     public String getBranch() { return branch; }
     public void setBranch(String branch) { this.branch = branch; }
+
+    /**
+     * Getter untuk cicilan per bulan
+     */
+    public int getCicilanPerBulan() {
+        return this.cicilan_per_bulan;
+    }
+
+    /**
+     * Setter untuk cicilan per bulan
+     */
+    public void setCicilanPerBulan(int cicilanPerBulan) {
+        this.cicilan_per_bulan = cicilanPerBulan;
+    }
 }

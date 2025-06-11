@@ -484,4 +484,12 @@ public class ContractView extends JPanel {
         }
         return new ImageIcon(new ImageIcon(resource).getImage().getScaledInstance(width, height, Image.SCALE_SMOOTH));
     }
+
+    @Override
+    public void setVisible(boolean visible) {
+        super.setVisible(visible);
+        if (visible) {
+            loadTableData(); // Auto refresh saat panel ditampilkan
+        }
+    }
 }
