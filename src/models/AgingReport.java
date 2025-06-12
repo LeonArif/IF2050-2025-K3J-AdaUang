@@ -139,6 +139,126 @@ public class AgingReport extends BaseModel {
         return reports;
     }
 
+    public static AgingReport getAgingReportSummary() {
+        String sql = """
+            SELECT 
+                'TOTAL SEMUA CABANG' as branch,
+                COUNT(DISTINCT k.id_kontrak) as total_nasabah,
+                SUM(CASE WHEN overdue_tenor = 1 THEN outstanding_amount ELSE 0 END) as aging_1_30,
+                SUM(CASE WHEN overdue_tenor = 2 THEN outstanding_amount ELSE 0 END) as aging_31_60,
+                SUM(CASE WHEN overdue_tenor = 3 THEN outstanding_amount ELSE 0 END) as aging_61_90,
+                SUM(CASE WHEN overdue_tenor > 3 THEN outstanding_amount ELSE 0 END) as aging_over_90
+            FROM kontrak k
+            JOIN users u ON k.id_user = u.id_user
+            INNER JOIN (
+                SELECT 
+                    k.id_kontrak,
+                    GREATEST(0, 
+                        LEAST(k.tenor, TIMESTAMPDIFF(MONTH, k.tanggal_pinjam, CURDATE()) + 1) - 
+                        COALESCE((SELECT MAX(c.tenor) FROM cicilan c WHERE c.id_kontrak = k.id_kontrak), 0)
+                    ) as overdue_tenor,
+                    k.cicilan_per_bulan * GREATEST(0, 
+                        LEAST(k.tenor, TIMESTAMPDIFF(MONTH, k.tanggal_pinjam, CURDATE()) + 1) - 
+                        COALESCE((SELECT MAX(c.tenor) FROM cicilan c WHERE c.id_kontrak = k.id_kontrak), 0)
+                    ) as outstanding_amount
+                FROM kontrak k
+                WHERE k.status = true
+            ) overdue_calc ON k.id_kontrak = overdue_calc.id_kontrak
+            WHERE overdue_calc.overdue_tenor > 0
+            """;
+
+        try (Connection conn = dbConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    AgingReport summary = new AgingReport();
+                    summary.setBranch(rs.getString("branch"));
+                    summary.setTotalNasabah(rs.getInt("total_nasabah"));
+                    summary.setAging1to30(rs.getLong("aging_1_30"));
+                    summary.setAging31to60(rs.getLong("aging_31_60"));
+                    summary.setAging61to90(rs.getLong("aging_61_90"));
+                    summary.setAgingOver90(rs.getLong("aging_over_90"));
+                    return summary;
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        
+        // Return empty summary if no data
+        AgingReport emptySummary = new AgingReport();
+        emptySummary.setBranch("TOTAL SEMUA CABANG");
+        emptySummary.setTotalNasabah(0);
+        emptySummary.setAging1to30(0);
+        emptySummary.setAging31to60(0);
+        emptySummary.setAging61to90(0);
+        emptySummary.setAgingOver90(0);
+        return emptySummary;
+    }
+
+    public static AgingReport getAgingReportSummaryByDate(int month, int year) {
+        String sql = """
+            SELECT 
+                'TOTAL SEMUA CABANG' as branch,
+                COUNT(DISTINCT k.id_kontrak) as total_nasabah,
+                SUM(CASE WHEN overdue_tenor = 1 THEN outstanding_amount ELSE 0 END) as aging_1_30,
+                SUM(CASE WHEN overdue_tenor = 2 THEN outstanding_amount ELSE 0 END) as aging_31_60,
+                SUM(CASE WHEN overdue_tenor = 3 THEN outstanding_amount ELSE 0 END) as aging_61_90,
+                SUM(CASE WHEN overdue_tenor > 3 THEN outstanding_amount ELSE 0 END) as aging_over_90
+            FROM kontrak k
+            JOIN users u ON k.id_user = u.id_user
+            INNER JOIN (
+                SELECT 
+                    k.id_kontrak,
+                    GREATEST(0, 
+                        LEAST(k.tenor, TIMESTAMPDIFF(MONTH, k.tanggal_pinjam, ?) + 1) - 
+                        COALESCE((SELECT MAX(c.tenor) FROM cicilan c WHERE c.id_kontrak = k.id_kontrak), 0)
+                    ) as overdue_tenor,
+                    k.cicilan_per_bulan * GREATEST(0, 
+                        LEAST(k.tenor, TIMESTAMPDIFF(MONTH, k.tanggal_pinjam, ?) + 1) - 
+                        COALESCE((SELECT MAX(c.tenor) FROM cicilan c WHERE c.id_kontrak = k.id_kontrak), 0)
+                    ) as outstanding_amount
+                FROM kontrak k
+                WHERE k.status = true
+            ) overdue_calc ON k.id_kontrak = overdue_calc.id_kontrak
+            WHERE overdue_calc.overdue_tenor > 0
+            """;
+
+        try (Connection conn = dbConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            String dateStr = String.format("%d-%02d-01", year, month);
+            stmt.setString(1, dateStr);
+            stmt.setString(2, dateStr);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    AgingReport summary = new AgingReport();
+                    summary.setBranch(rs.getString("branch"));
+                    summary.setTotalNasabah(rs.getInt("total_nasabah"));
+                    summary.setAging1to30(rs.getLong("aging_1_30"));
+                    summary.setAging31to60(rs.getLong("aging_31_60"));
+                    summary.setAging61to90(rs.getLong("aging_61_90"));
+                    summary.setAgingOver90(rs.getLong("aging_over_90"));
+                    return summary;
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        
+        // Return empty summary if no data
+        AgingReport emptySummary = new AgingReport();
+        emptySummary.setBranch("TOTAL SEMUA CABANG");
+        emptySummary.setTotalNasabah(0);
+        emptySummary.setAging1to30(0);
+        emptySummary.setAging31to60(0);
+        emptySummary.setAging61to90(0);
+        emptySummary.setAgingOver90(0);
+        return emptySummary;
+    }
+
     public static void debugAgingData() {
         String debugSql = """
             SELECT 

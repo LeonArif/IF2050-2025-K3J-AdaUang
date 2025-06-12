@@ -19,7 +19,9 @@ public class AgingReportView extends JPanel {
     private final AgingReportController agingReportController;
     private final AuthController authController;
     private JTable agingTable;
+    private JTable summaryTable; // Tambahkan tabel summary
     private DefaultTableModel tableModel;
+    private DefaultTableModel summaryTableModel; // Tambahkan model untuk summary
     private JComboBox<String> monthComboBox;
     private JComboBox<Integer> yearComboBox;
 
@@ -58,8 +60,9 @@ public class AgingReportView extends JPanel {
 
         panel.add(headerPanel, BorderLayout.NORTH);
 
-        JPanel tableContainer = createTableContainer();
-        panel.add(tableContainer, BorderLayout.CENTER);
+        // Create tables container dengan kedua tabel
+        JPanel tablesContainer = createTablesContainer();
+        panel.add(tablesContainer, BorderLayout.CENTER);
 
         return panel;
     }
@@ -98,25 +101,112 @@ public class AgingReportView extends JPanel {
         return filterPanel;
     }
 
-    private JPanel createTableContainer() {
-        JPanel tableContainer = new JPanel(new BorderLayout());
-        tableContainer.setBackground(Color.WHITE);
-        
-        String[] columns = {"Cabang", "Total Nasabah", "1-30 Hari", "31-60 Hari", "61-90 Hari", ">90 Hari", "Total Outstanding"};
+    private JPanel createTablesContainer() {
+        JPanel tablesContainer = new JPanel(new BorderLayout(0, 20));
+        tablesContainer.setOpaque(false);
+
+        // Summary table di atas
+        JPanel summaryContainer = createSummaryTableContainer();
+        tablesContainer.add(summaryContainer, BorderLayout.NORTH);
+
+        // Detail table per cabang di bawah
+        JPanel detailContainer = createDetailTableContainer();
+        tablesContainer.add(detailContainer, BorderLayout.CENTER);
+
+        return tablesContainer;
+    }
+
+    private JPanel createSummaryTableContainer() {
+        JPanel summaryContainer = new JPanel(new BorderLayout());
+        summaryContainer.setBackground(Color.WHITE);
+        summaryContainer.setBorder(BorderFactory.createTitledBorder(
+            BorderFactory.createLineBorder(new Color(100, 100, 100), 1),
+            "RINGKASAN SEMUA CABANG",
+            0, 0,
+            new Font("Montserrat", Font.BOLD, 16),
+            new Color(100, 100, 100)
+        ));
+
+        String[] columns = {"Total Nasabah", "1-30 Hari", "31-60 Hari", "61-90 Hari", ">90 Hari", "Total"};
+        summaryTableModel = new DefaultTableModel(columns, 0) {
+            @Override public boolean isCellEditable(int row, int col) { return false; }
+        };
+        summaryTable = new JTable(summaryTableModel);
+        setupSummaryTableStyle();
+
+        JScrollPane summaryScrollPane = new JScrollPane(summaryTable);
+        summaryScrollPane.setBorder(BorderFactory.createLineBorder(new Color(220, 220, 220)));
+        summaryScrollPane.getViewport().setBackground(Color.WHITE);
+        summaryScrollPane.setPreferredSize(new Dimension(0, 80)); // Set tinggi fixed
+
+        summaryContainer.add(summaryTable.getTableHeader(), BorderLayout.NORTH);
+        summaryContainer.add(summaryScrollPane, BorderLayout.CENTER);
+
+        return summaryContainer;
+    }
+
+    private JPanel createDetailTableContainer() {
+        JPanel detailContainer = new JPanel(new BorderLayout());
+        detailContainer.setBackground(Color.WHITE);
+        detailContainer.setBorder(BorderFactory.createTitledBorder(
+            BorderFactory.createLineBorder(new Color(100, 100, 100), 1),
+            "DETAIL PER CABANG",
+            0, 0,
+            new Font("Montserrat", Font.BOLD, 16),
+            new Color(100, 100, 100)
+        ));
+
+        String[] columns = {"Cabang", "Total Nasabah", "1-30 Hari", "31-60 Hari", "61-90 Hari", ">90 Hari", "Total"};
         tableModel = new DefaultTableModel(columns, 0) {
             @Override public boolean isCellEditable(int row, int col) { return false; }
         };
         agingTable = new JTable(tableModel);
         setupTableStyle();
-        
+
         JScrollPane scrollPane = new JScrollPane(agingTable);
         scrollPane.setBorder(BorderFactory.createLineBorder(new Color(220, 220, 220)));
         scrollPane.getViewport().setBackground(Color.WHITE);
+
+        detailContainer.add(agingTable.getTableHeader(), BorderLayout.NORTH);
+        detailContainer.add(scrollPane, BorderLayout.CENTER);
+
+        return detailContainer;
+    }
+
+    private void setupSummaryTableStyle() {
+        Color borderColor = new Color(220, 220, 220);
+        summaryTable.setRowHeight(50);
+        summaryTable.setFont(new Font("Montserrat", Font.BOLD, 16));
+        summaryTable.setSelectionBackground(new Color(235, 240, 255));
+        summaryTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
+        summaryTable.setShowGrid(true);
+        summaryTable.setGridColor(borderColor);
+        summaryTable.setIntercellSpacing(new Dimension(0, 0));
+
+        JTableHeader header = summaryTable.getTableHeader();
+        header.setPreferredSize(new Dimension(100, 40));
+        header.setFont(new Font("Montserrat", Font.BOLD, 14));
+        header.setBackground(new Color(245, 247, 250));
+        header.setForeground(new Color(100, 100, 100));
+        header.setBorder(BorderFactory.createLineBorder(borderColor));
+
+        // Right-align currency columns
+        DefaultTableCellRenderer currencyRenderer = new DefaultTableCellRenderer();
+        currencyRenderer.setHorizontalAlignment(SwingConstants.RIGHT);
+        currencyRenderer.setFont(new Font("Montserrat", Font.BOLD, 16));
         
-        tableContainer.add(agingTable.getTableHeader(), BorderLayout.NORTH);
-        tableContainer.add(scrollPane, BorderLayout.CENTER);
+        DefaultTableCellRenderer centerRenderer = new DefaultTableCellRenderer();
+        centerRenderer.setHorizontalAlignment(SwingConstants.CENTER);
+        centerRenderer.setFont(new Font("Montserrat", Font.BOLD, 16));
+
+        summaryTable.getColumnModel().getColumn(0).setCellRenderer(centerRenderer); // Total Nasabah
         
-        return tableContainer;
+        for(int i = 1; i < summaryTable.getColumnCount(); i++){
+            summaryTable.getColumnModel().getColumn(i).setCellRenderer(currencyRenderer);
+        }
+
+        // Tambahkan mouse listener untuk toggle selection
+        setupToggleableSelection(summaryTable);
     }
 
     private void setupTableStyle() {
@@ -149,6 +239,35 @@ public class AgingReportView extends JPanel {
         for(int i = 2; i < agingTable.getColumnCount(); i++){
             agingTable.getColumnModel().getColumn(i).setCellRenderer(currencyRenderer);
         }
+
+        // Tambahkan mouse listener untuk toggle selection
+        setupToggleableSelection(agingTable);
+    }
+
+    // Tambahkan method baru untuk handle toggle selection
+    private void setupToggleableSelection(JTable table) {
+        table.setSelectionModel(new DefaultListSelectionModel() {
+            private int lastSelectedRow = -1;
+            
+            @Override
+            public void setSelectionInterval(int index0, int index1) {
+                if (lastSelectedRow == index0) {
+                    // Jika row yang sama diklik ulang, clear selection
+                    clearSelection();
+                    lastSelectedRow = -1;
+                } else {
+                    // Jika row berbeda, select row tersebut
+                    super.setSelectionInterval(index0, index1);
+                    lastSelectedRow = index0;
+                }
+            }
+            
+            @Override
+            public void clearSelection() {
+                super.clearSelection();
+                lastSelectedRow = -1;
+            }
+        });
     }
 
     private void loadTableData() {
@@ -156,15 +275,33 @@ public class AgingReportView extends JPanel {
             // Debug data terlebih dahulu
             AgingReport.debugAgingData();
             
+            // Clear both tables
             tableModel.setRowCount(0);
+            summaryTableModel.setRowCount(0);
             
             // Get selected month and year
             int selectedMonth = monthComboBox.getSelectedIndex() + 1;
             int selectedYear = (Integer) yearComboBox.getSelectedItem();
             
+            // Load summary data
+            AgingReport summary = agingReportController.getAgingReportSummaryByMonthYear(selectedMonth, selectedYear);
+            long summaryTotal = summary.getAging1to30() + summary.getAging31to60() + 
+                              summary.getAging61to90() + summary.getAgingOver90();
+            
+            summaryTableModel.addRow(new Object[]{
+                summary.getTotalNasabah(),
+                formatCurrency(summary.getAging1to30()),
+                formatCurrency(summary.getAging31to60()),
+                formatCurrency(summary.getAging61to90()),
+                formatCurrency(summary.getAgingOver90()),
+                formatCurrency(summaryTotal)
+            });
+            
+            // Load detail data per branch
             List<AgingReport> reports = agingReportController.getAgingReportByMonthYear(selectedMonth, selectedYear);
             
             System.out.println("Found " + reports.size() + " aging reports for " + selectedMonth + "/" + selectedYear);
+            System.out.println("Summary - Total Nasabah: " + summary.getTotalNasabah() + ", Total Outstanding: " + formatCurrency(summaryTotal));
             
             for (AgingReport report : reports) {
                 long totalOutstanding = report.getAging1to30() + report.getAging31to60() + 

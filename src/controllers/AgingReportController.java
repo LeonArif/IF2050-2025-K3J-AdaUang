@@ -19,4 +19,13 @@ public class AgingReportController extends BaseController {
     public List<AgingReport> getAgingReportByMonthYear(int month, int year) {
         return agingReportService.getAgingReportByBranchAndDate(month, year);
     }
+    
+    // Tambahkan method baru untuk summary
+    public AgingReport getAgingReportSummary() {
+        return agingReportService.getAgingReportSummary();
+    }
+    
+    public AgingReport getAgingReportSummaryByMonthYear(int month, int year) {
+        return agingReportService.getAgingReportSummaryByDate(month, year);
+    }
 }
