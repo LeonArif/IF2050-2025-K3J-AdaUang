@@ -30,9 +30,8 @@ AdaUang adalah suatu sistem untuk membantu perusahaan dalam mencatat kontrak pin
    Lakukan Clone Repository, Lalu masuk ke dalam folder repository tersebut
 
 2. **Konfigurasi SQL**
-   Pada file app/src/main/java/config/DatabaseConfig.java
-   Line 42
-   Ubah Password dengan password SQL anda
+   - Pada file app/src/main/java/config/DatabaseConfig.java --> Line 42
+   - Ubah Password dengan password SQL anda
 
 3. **Build Aplikasi**
    ```bash
