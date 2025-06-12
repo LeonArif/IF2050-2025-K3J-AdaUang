@@ -92,7 +92,7 @@ public class Contract extends BaseModel {
         List<Contract> contracts = new ArrayList<>();
         String sql = "SELECT k.*, u.username, u.branch FROM kontrak k " +
                 "JOIN users u ON k.id_user = u.id_user " +
-                "ORDER BY k.id_kontrak DESC";
+                "ORDER BY k.id_kontrak ASC";
 
         try (Connection conn = dbConnection.getConnection();
              Statement stmt = conn.createStatement();
@@ -163,8 +163,8 @@ public class Contract extends BaseModel {
         List<Contract> contracts = new ArrayList<>();
         String sql = "SELECT k.*, u.username, u.branch FROM kontrak k " +
                 "JOIN users u ON k.id_user = u.id_user " +
-                "WHERE k.status = 0 " + // 0 = belum lunas
-                "ORDER BY k.id_kontrak DESC"; // DESC untuk yang terbaru di atas
+                "WHERE k.status = 0 " + 
+                "ORDER BY k.id_kontrak ASC";
 
         try (Connection conn = dbConnection.getConnection();
              Statement stmt = conn.createStatement();

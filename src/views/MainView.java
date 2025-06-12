@@ -24,7 +24,7 @@ public class MainView extends JFrame {
         setSize(AppConstants.WINDOW_WIDTH, AppConstants.WINDOW_HEIGHT);
         setLocationRelativeTo(null);
         setLayout(new BorderLayout());
-        setIconImage(new ImageIcon(getClass().getResource("/icon.png")).getImage());
+        setIconImage(new ImageIcon(getClass().getResource("/assets/icon.png")).getImage());
 
         SidebarView.SidebarListener sidebarListener = new SidebarView.SidebarListener() {
             @Override
@@ -45,8 +45,8 @@ public class MainView extends JFrame {
         mainPanel = new JPanel(cardLayout);
 
         mainPanel.add(new ContractView(authController), "kontrak");
-        mainPanel.add(new InstalmentView(authController), "cicilan"); // ✅ Benar
-        mainPanel.add(new AgingReportView(authController), "aging-report"); // ✅ Benar
+        mainPanel.add(new InstalmentView(authController), "cicilan");
+        mainPanel.add(new AgingReportView(authController), "aging-report");
 
         if (currentUser != null && "admin".equals(currentUser.getRole())) {
             mainPanel.add(new UserManagementView(userController, authController), "user_management");

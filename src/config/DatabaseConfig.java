@@ -39,7 +39,7 @@ public class DatabaseConfig {
         properties.setProperty("db.port", "3306");
         properties.setProperty("db.name", "adauang_db");
         properties.setProperty("db.username", "root");
-        properties.setProperty("db.password", "25februari2005");
+        properties.setProperty("db.password", "<<YOUR_PASSWORD_HERE>>");
         properties.setProperty("db.table.users", "users");
         properties.setProperty("app.name", "AdaUang");
         properties.setProperty("debug.mode", "true");

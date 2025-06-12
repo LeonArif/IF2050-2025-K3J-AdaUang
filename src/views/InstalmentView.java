@@ -3,344 +3,407 @@ package views;
 import controllers.AuthController;
 import controllers.ContractController;
 import controllers.InstalmentController;
-import java.awt.*;
-import java.time.LocalDate;
-import java.util.List;
-import javax.swing.*;
-import javax.swing.border.EmptyBorder;
-import javax.swing.table.DefaultTableModel;
-import models.Cicilan;
+import models.Instalment;
 import models.Contract;
 import models.User;
 
+import javax.swing.*;
+import javax.swing.border.EmptyBorder;
+import javax.swing.table.DefaultTableModel;
+import java.awt.*;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
+import java.util.List;
+
 public class InstalmentView extends JPanel {
+    
+    // Controllers
     private final InstalmentController instalmentController;
     private final ContractController contractController;
     private final AuthController authController;
     
-    // Components untuk daftar kontrak
-    private JTable kontrakTable;
-    private DefaultTableModel kontrakTableModel;
+    // UI Components - Tables
+    private JTable contractTable;
+    private DefaultTableModel contractTableModel;
+    private JTable instalmentTable;
+    private DefaultTableModel instalmentTableModel;
     
-    // Components untuk cicilan kontrak yang dipilih
-    private JTable cicilanTable;
-    private DefaultTableModel cicilanTableModel;
+    // UI Components - Form
+    private JTextField dateField;
+    private JLabel selectedContractLabel;
+    private JLabel paymentAmountLabel;
+    private JLabel nextTenorLabel;
+    private JButton payButton;
+    private JButton cancelButton;
     
-    // Components untuk tambah cicilan
-    private JTextField inputTenor, inputTanggal;
-    private JLabel labelKontrakTerpilih, labelJumlahCicilan, labelTenorSelanjutnya;
-    private JButton buttonBayar, buttonCancel;
-    
-    // Data kontrak yang sedang dipilih
-    private Contract selectedKontrak = null;
+    // State
+    private Contract selectedContract = null;
 
     public InstalmentView(AuthController authController) {
         this.authController = authController;
         this.instalmentController = new InstalmentController();
         this.contractController = new ContractController();
 
+        initializeView();
+        initializeComponents();
+        loadData();
+    }
+
+    private void initializeView() {
         setLayout(null);
         setBackground(new Color(248, 249, 251));
         setPreferredSize(new Dimension(900, 600));
-        setVisible(true);
         setName("cicilan");
-
-        initializeComponents();
-        loadKontrakData();
     }
 
     private void initializeComponents() {
-        JLabel titleLabel = new JLabel("Pembayaran Cicilan");
-        titleLabel.setFont(new Font("Montserrat", Font.BOLD, 20)); 
-        titleLabel.setForeground(new Color(39, 49, 157)); 
+        createTitle();
+        createContractSection();
+        createInstalmentSection();
+        createPaymentForm();
+    }
+
+    private void createTitle() {
+        JLabel titleLabel = new JLabel("Manajemen Cicilan");
+        titleLabel.setFont(new Font("Montserrat", Font.BOLD, 20));
+        titleLabel.setForeground(new Color(39, 49, 157));
         titleLabel.setBounds(20, 8, 300, 22);
         add(titleLabel);
+    }
 
-        JLabel kontrakLabel = new JLabel("1. Pilih Kontrak");
-        kontrakLabel.setFont(new Font("Montserrat", Font.BOLD, 13)); 
-        kontrakLabel.setForeground(new Color(30, 30, 30));
-        kontrakLabel.setBounds(20, 35, 180, 16); 
-        add(kontrakLabel);
+    private void createContractSection() {
+        // Section label
+        JLabel contractLabel = new JLabel("1. Pilih Kontrak");
+        contractLabel.setFont(new Font("Montserrat", Font.BOLD, 13));
+        contractLabel.setForeground(new Color(30, 30, 30));
+        contractLabel.setBounds(20, 35, 180, 16);
+        add(contractLabel);
 
-        String[] kontrakColumns = {"ID", "Nama", "Total", "Cicilan/Bln", "Tenor", "Status"};
-        kontrakTableModel = new DefaultTableModel(kontrakColumns, 0) {
+        // Table setup
+        String[] contractColumns = {"ID", "Nama Peminjam", "Total", "Cicilan/Bulan", "Tenor", "Status"};
+        contractTableModel = new DefaultTableModel(contractColumns, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
                 return false;
             }
         };
-        kontrakTable = new JTable(kontrakTableModel);
-        kontrakTable.setRowHeight(20); 
-        kontrakTable.setFont(new Font("Montserrat", Font.PLAIN, 10)); 
-        kontrakTable.getTableHeader().setFont(new Font("Montserrat", Font.BOLD, 10));
-        kontrakTable.getTableHeader().setBackground(new Color(245, 245, 245));
-        kontrakTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         
-        kontrakTable.getSelectionModel().addListSelectionListener(e -> {
+        contractTable = new JTable(contractTableModel);
+        contractTable.setRowHeight(20);
+        contractTable.setFont(new Font("Montserrat", Font.PLAIN, 10));
+        contractTable.getTableHeader().setFont(new Font("Montserrat", Font.BOLD, 10));
+        contractTable.getTableHeader().setBackground(new Color(245, 245, 245));
+        contractTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        
+        // Selection listener
+        contractTable.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
-                handleKontrakSelection();
+                handleContractSelection();
             }
         });
 
-        JScrollPane kontrakScroll = new JScrollPane(kontrakTable);
-        kontrakScroll.setBounds(20, 55, 800, 85); 
-        kontrakScroll.setBorder(BorderFactory.createLineBorder(new Color(200, 200, 200)));
-        add(kontrakScroll);
+        JScrollPane contractScroll = new JScrollPane(contractTable);
+        contractScroll.setBounds(20, 55, 800, 85);
+        contractScroll.setBorder(BorderFactory.createLineBorder(new Color(200, 200, 200)));
+        add(contractScroll);
+    }
 
-        JLabel cicilanLabel = new JLabel("2. Detail Cicilan");
-        cicilanLabel.setFont(new Font("Montserrat", Font.BOLD, 13)); 
-        cicilanLabel.setForeground(new Color(30, 30, 30));
-        cicilanLabel.setBounds(20, 150, 180, 16); 
-        add(cicilanLabel);
+    private void createInstalmentSection() {
+        // Section label
+        JLabel instalmentLabel = new JLabel("2. Riwayat Cicilan");
+        instalmentLabel.setFont(new Font("Montserrat", Font.BOLD, 13));
+        instalmentLabel.setForeground(new Color(30, 30, 30));
+        instalmentLabel.setBounds(20, 150, 180, 16);
+        add(instalmentLabel);
 
-        labelKontrakTerpilih = new JLabel("Belum ada kontrak dipilih");
-        labelKontrakTerpilih.setFont(new Font("Montserrat", Font.ITALIC, 10)); 
-        labelKontrakTerpilih.setForeground(new Color(100, 100, 100));
-        labelKontrakTerpilih.setBounds(20, 168, 350, 14);
-        add(labelKontrakTerpilih);
+        // Selected contract info
+        selectedContractLabel = new JLabel("Belum ada kontrak dipilih");
+        selectedContractLabel.setFont(new Font("Montserrat", Font.ITALIC, 10));
+        selectedContractLabel.setForeground(new Color(100, 100, 100));
+        selectedContractLabel.setBounds(20, 168, 500, 14);
+        add(selectedContractLabel);
 
-        String[] cicilanColumns = {"Tenor", "Jumlah", "Tanggal", "Staff"};
-        cicilanTableModel = new DefaultTableModel(cicilanColumns, 0) {
+        // Table setup
+        String[] instalmentColumns = {"Tenor", "Jumlah", "Tanggal", "Staff"};
+        instalmentTableModel = new DefaultTableModel(instalmentColumns, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
                 return false;
             }
         };
-        cicilanTable = new JTable(cicilanTableModel);
-        cicilanTable.setRowHeight(20); 
-        cicilanTable.setFont(new Font("Montserrat", Font.PLAIN, 10));
-        cicilanTable.getTableHeader().setFont(new Font("Montserrat", Font.BOLD, 10));
-        cicilanTable.getTableHeader().setBackground(new Color(245, 245, 245));
+        
+        instalmentTable = new JTable(instalmentTableModel);
+        instalmentTable.setRowHeight(20);
+        instalmentTable.setFont(new Font("Montserrat", Font.PLAIN, 10));
+        instalmentTable.getTableHeader().setFont(new Font("Montserrat", Font.BOLD, 10));
+        instalmentTable.getTableHeader().setBackground(new Color(245, 245, 245));
 
-        // Perbesar tabel cicilan ke bawah lagi
-        JScrollPane cicilanScroll = new JScrollPane(cicilanTable);
-        cicilanScroll.setBounds(20, 185, 800, 280);
-        cicilanScroll.setBorder(BorderFactory.createLineBorder(new Color(200, 200, 200)));
-        add(cicilanScroll);
+        JScrollPane instalmentScroll = new JScrollPane(instalmentTable);
+        instalmentScroll.setBounds(20, 185, 800, 280);
+        instalmentScroll.setBorder(BorderFactory.createLineBorder(new Color(200, 200, 200)));
+        add(instalmentScroll);
+    }
 
-        JLabel tambahLabel = new JLabel("3. Tambah Pembayaran");
-        tambahLabel.setFont(new Font("Montserrat", Font.BOLD, 13)); 
-        tambahLabel.setForeground(new Color(30, 30, 30));
-        tambahLabel.setBounds(20, 475, 170, 16);
-        add(tambahLabel);
+    private void createPaymentForm() {
+        // Section label
+        JLabel paymentLabel = new JLabel("3. Tambah Pembayaran");
+        paymentLabel.setFont(new Font("Montserrat", Font.BOLD, 13));
+        paymentLabel.setForeground(new Color(30, 30, 30));
+        paymentLabel.setBounds(20, 475, 170, 16);
+        add(paymentLabel);
 
+        // Form panel
         JPanel formPanel = new JPanel(null);
         formPanel.setBackground(Color.WHITE);
         formPanel.setBounds(20, 493, 400, 112);
         formPanel.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(new Color(230, 230, 230)),
-                new EmptyBorder(6, 6, 6, 6) 
+                new EmptyBorder(6, 6, 6, 6)
         ));
         add(formPanel);
 
+        // Tenor info
         JLabel tenorLabel = new JLabel("Tenor ke-");
         tenorLabel.setFont(new Font("Montserrat", Font.PLAIN, 10));
         tenorLabel.setBounds(5, 5, 50, 16);
         formPanel.add(tenorLabel);
 
-        labelTenorSelanjutnya = new JLabel("-");
-        labelTenorSelanjutnya.setFont(new Font("Montserrat", Font.BOLD, 10));
-        labelTenorSelanjutnya.setForeground(new Color(39, 49, 157));
-        labelTenorSelanjutnya.setBounds(60, 5, 60, 16);
-        formPanel.add(labelTenorSelanjutnya);
+        nextTenorLabel = new JLabel("-");
+        nextTenorLabel.setFont(new Font("Montserrat", Font.BOLD, 10));
+        nextTenorLabel.setForeground(new Color(39, 49, 157));
+        nextTenorLabel.setBounds(60, 5, 60, 16);
+        formPanel.add(nextTenorLabel);
 
-        JLabel jumlahLabel = new JLabel("Jumlah:");
-        jumlahLabel.setFont(new Font("Montserrat", Font.PLAIN, 10));
-        jumlahLabel.setBounds(5, 25, 40, 16); 
-        formPanel.add(jumlahLabel);
+        // Amount info
+        JLabel amountLabel = new JLabel("Jumlah:");
+        amountLabel.setFont(new Font("Montserrat", Font.PLAIN, 10));
+        amountLabel.setBounds(5, 25, 40, 16);
+        formPanel.add(amountLabel);
 
-        labelJumlahCicilan = new JLabel("-");
-        labelJumlahCicilan.setFont(new Font("Montserrat", Font.BOLD, 10));
-        labelJumlahCicilan.setForeground(new Color(39, 49, 157));
-        labelJumlahCicilan.setBounds(50, 25, 120, 16);
-        formPanel.add(labelJumlahCicilan);
+        paymentAmountLabel = new JLabel("-");
+        paymentAmountLabel.setFont(new Font("Montserrat", Font.BOLD, 10));
+        paymentAmountLabel.setForeground(new Color(39, 49, 157));
+        paymentAmountLabel.setBounds(50, 25, 120, 16);
+        formPanel.add(paymentAmountLabel);
 
-        JLabel tanggalLabel = new JLabel("Tanggal:");
-        tanggalLabel.setFont(new Font("Montserrat", Font.PLAIN, 10));
-        tanggalLabel.setBounds(5, 45, 45, 16);
-        formPanel.add(tanggalLabel);
+        // Date input
+        JLabel dateLabel = new JLabel("Tanggal:");
+        dateLabel.setFont(new Font("Montserrat", Font.PLAIN, 10));
+        dateLabel.setBounds(5, 45, 45, 16);
+        formPanel.add(dateLabel);
 
-        inputTanggal = new JTextField(LocalDate.now().toString());
-        inputTanggal.setBounds(50, 45, 120, 16); 
-        formPanel.add(inputTanggal);
+        dateField = new JTextField(LocalDate.now().toString());
+        dateField.setBounds(50, 45, 120, 16);
+        formPanel.add(dateField);
 
-        buttonBayar = new JButton("Bayar");
-        buttonBayar.setBounds(5, 75, 70, 25);
-        buttonBayar.setBackground(new Color(40, 167, 69));
-        buttonBayar.setForeground(Color.WHITE);
-        buttonBayar.setFont(new Font("Montserrat", Font.BOLD, 9)); 
-        buttonBayar.setFocusPainted(false);
-        buttonBayar.setOpaque(true);
-        buttonBayar.setBorderPainted(false);
-        buttonBayar.setEnabled(false);
-        formPanel.add(buttonBayar);
+        // Buttons
+        payButton = new JButton("Bayar");
+        payButton.setBounds(5, 75, 70, 25);
+        payButton.setBackground(new Color(40, 167, 69));
+        payButton.setForeground(Color.WHITE);
+        payButton.setFont(new Font("Montserrat", Font.BOLD, 9));
+        payButton.setFocusPainted(false);
+        payButton.setOpaque(true);
+        payButton.setBorderPainted(false);
+        payButton.setEnabled(false);
+        payButton.addActionListener(e -> handlePayment());
+        formPanel.add(payButton);
 
-        buttonCancel = new JButton("Batal");
-        buttonCancel.setBounds(80, 75, 70, 25); 
-        buttonCancel.setBackground(new Color(220, 53, 69));
-        buttonCancel.setForeground(Color.WHITE);
-        buttonCancel.setFont(new Font("Montserrat", Font.BOLD, 9));
-        buttonCancel.setFocusPainted(false);
-        buttonCancel.setOpaque(true);
-        buttonCancel.setBorderPainted(false);
-        formPanel.add(buttonCancel);
-
-        // Event listeners
-        buttonBayar.addActionListener(e -> handleBayar());
-        buttonCancel.addActionListener(e -> clearSelection());
+        cancelButton = new JButton("Batal");
+        cancelButton.setBounds(80, 75, 70, 25);
+        cancelButton.setBackground(new Color(220, 53, 69));
+        cancelButton.setForeground(Color.WHITE);
+        cancelButton.setFont(new Font("Montserrat", Font.BOLD, 9));
+        cancelButton.setFocusPainted(false);
+        cancelButton.setOpaque(true);
+        cancelButton.setBorderPainted(false);
+        cancelButton.addActionListener(e -> clearSelection());
+        formPanel.add(cancelButton);
     }
 
-    private void loadKontrakData() {
+    private void loadData() {
+        loadContractData();
+    }
+
+    private void loadContractData() {
+        if (contractTableModel == null) return;
+        
         try {
-            kontrakTableModel.setRowCount(0);
+            contractTableModel.setRowCount(0);
             
-            List<Contract> kontrakList = contractController.getAllKontrak();
-            System.out.println("Loaded " + kontrakList.size() + " contracts");
+            List<Contract> contracts = contractController.getAllKontrak();
             
-            for (Contract kontrak : kontrakList) {
-                String status = kontrak.isStatus() ? "Belum Lunas" : "Lunas";
-                kontrakTableModel.addRow(new Object[]{
-                    kontrak.getIdKontrak(),
-                    kontrak.getNamaPeminjam(),
-                    String.format("%,d", kontrak.getTotal()),
-                    String.format("%,d", kontrak.getCicilanPerBulan()),
-                    kontrak.getTenor() + "x",
+            for (Contract contract : contracts) {
+                String status = contract.isStatus() ? "Aktif" : "Lunas";
+                contractTableModel.addRow(new Object[]{
+                    contract.getIdKontrak(),
+                    contract.getNamaPeminjam(),
+                    String.format("Rp %,d", contract.getTotal()),
+                    String.format("Rp %,d", contract.getCicilanPerBulan()),
+                    contract.getTenor() + "x",
                     status
                 });
             }
             
         } catch (Exception e) {
-            System.err.println("Error loading kontrak data: " + e.getMessage());
-            e.printStackTrace();
+            showErrorMessage("Error memuat data kontrak: " + e.getMessage());
         }
     }
 
-    private void handleKontrakSelection() {
-        int selectedRow = kontrakTable.getSelectedRow();
+    private void handleContractSelection() {
+        int selectedRow = contractTable.getSelectedRow();
         if (selectedRow >= 0) {
             try {
-                int idKontrak = (Integer) kontrakTableModel.getValueAt(selectedRow, 0);
-                selectedKontrak = contractController.getKontrakById(idKontrak);
+                int contractId = (Integer) contractTableModel.getValueAt(selectedRow, 0);
+                selectedContract = contractController.getKontrakById(contractId);
                 
-                if (selectedKontrak != null) {
-                    updateKontrakSelection();
-                    loadCicilanData(idKontrak);
+                if (selectedContract != null) {
+                    updateContractSelection();
+                    loadInstalmentData(contractId);
                 }
             } catch (Exception e) {
-                e.printStackTrace();
+                showErrorMessage("Error memilih kontrak: " + e.getMessage());
             }
         }
     }
 
-    private void updateKontrakSelection() {
-        if (selectedKontrak != null) {
-            labelKontrakTerpilih.setText("Kontrak: " + selectedKontrak.getNamaPeminjam() + 
-                                       " (ID: " + selectedKontrak.getIdKontrak() + ")");
-            labelJumlahCicilan.setText("Rp " + String.format("%,d", selectedKontrak.getCicilanPerBulan()));
+    private void updateContractSelection() {
+        if (selectedContract != null) {
+            selectedContractLabel.setText(String.format("Kontrak: %s (ID: %d)", 
+                selectedContract.getNamaPeminjam(), 
+                selectedContract.getIdKontrak()));
             
-            int tenorSelanjutnya = calculateNextTenor(selectedKontrak.getIdKontrak());
-            if (tenorSelanjutnya > selectedKontrak.getTenor()) {
-                labelTenorSelanjutnya.setText("LUNAS");
-                buttonBayar.setEnabled(false);
+            paymentAmountLabel.setText(String.format("Rp %,d", selectedContract.getCicilanPerBulan()));
+            
+            int nextTenor = instalmentController.getNextTenor(selectedContract.getIdKontrak());
+            if (nextTenor > selectedContract.getTenor()) {
+                nextTenorLabel.setText("LUNAS");
+                payButton.setEnabled(false);
             } else {
-                labelTenorSelanjutnya.setText(String.valueOf(tenorSelanjutnya));
-                buttonBayar.setEnabled(true);
+                nextTenorLabel.setText(String.valueOf(nextTenor));
+                payButton.setEnabled(true);
+                
+                // Set minimum date (kalo kurang dari tgl bayar terakhir akan error)
+                LocalDate minDate = instalmentController.getMinimumPaymentDate(selectedContract.getIdKontrak());
+                if (minDate.isAfter(LocalDate.now())) {
+                    dateField.setText(minDate.toString());
+                }
             }
         }
     }
 
-    private int calculateNextTenor(int idKontrak) {
+    private void loadInstalmentData(int contractId) {
+        if (instalmentTableModel == null) return;
+        
         try {
-            return instalmentController.getNextTenor(idKontrak);
-        } catch (Exception e) {
-            return 1;
-        }
-    }
-
-    private void loadCicilanData(int idKontrak) {
-        try {
-            cicilanTableModel.setRowCount(0);
+            instalmentTableModel.setRowCount(0);
             
-            List<Cicilan> cicilanList = instalmentController.getCicilanByKontrak(idKontrak);
+            List<Instalment> instalments = instalmentController.getInstalmentsByContract(contractId);
             
-            for (Cicilan cicilan : cicilanList) {
-                cicilanTableModel.addRow(new Object[]{
-                    "Tenor ke-" + cicilan.getTenor(),
-                    "Rp " + String.format("%,d", cicilan.getJumlahCicilan()),
-                    cicilan.getTanggalCicilan(),
-                    "Staff ID: " + cicilan.getIdStaff()
+            for (Instalment instalment : instalments) {
+                instalmentTableModel.addRow(new Object[]{
+                    instalment.getTenorDisplay(),
+                    instalment.getFormattedAmount(),
+                    instalment.getTanggalCicilan(),
+                    "Staff ID: " + instalment.getIdStaff()
                 });
             }
             
         } catch (Exception e) {
-            System.err.println("Error loading cicilan data: " + e.getMessage());
+            showErrorMessage("Error memuat data cicilan: " + e.getMessage());
         }
     }
 
-    private void handleBayar() {
-        if (selectedKontrak == null) {
-            JOptionPane.showMessageDialog(this, "Silakan pilih kontrak terlebih dahulu.");
+    private void handlePayment() {
+        if (selectedContract == null) {
+            showWarningMessage("Silakan pilih kontrak terlebih dahulu.");
             return;
         }
 
         try {
-            int tenor = calculateNextTenor(selectedKontrak.getIdKontrak());
-            LocalDate tanggal = LocalDate.parse(inputTanggal.getText().trim());
-            int jumlah = selectedKontrak.getCicilanPerBulan();
+            // Parse input
+            LocalDate paymentDate = LocalDate.parse(dateField.getText().trim());
+            int tenor = instalmentController.getNextTenor(selectedContract.getIdKontrak());
+            int amount = selectedContract.getCicilanPerBulan();
 
+            // Get current user
             User currentUser = authController.getCurrentUser();
             if (currentUser == null) {
-                JOptionPane.showMessageDialog(this, "User tidak dikenali.");
+                showErrorMessage("User tidak dikenali.");
                 return;
             }
 
-            int idStaff = currentUser.getId_user();
-            boolean success = instalmentController.tambahCicilan(
-                selectedKontrak.getIdKontrak(), jumlah, tenor, tanggal, idStaff);
-            
-            if (success) {
-                JOptionPane.showMessageDialog(this, "Cicilan berhasil dibayar.");
-                
-                // Refresh semua data untuk update status
-                loadKontrakData(); // Refresh daftar kontrak
-                loadCicilanData(selectedKontrak.getIdKontrak()); // Refresh cicilan
-                
-                // Re-select kontrak untuk update status display
-                selectedKontrak = contractController.getKontrakById(selectedKontrak.getIdKontrak());
-                updateKontrakSelection();
-                
-            } else {
-                JOptionPane.showMessageDialog(this, 
-                    "Gagal menyimpan cicilan. Periksa tenor atau status kontrak.");
+            // Validate payment
+            if (!instalmentController.validatePayment(selectedContract.getIdKontrak(), tenor, paymentDate)) {
+                LocalDate minDate = instalmentController.getMinimumPaymentDate(selectedContract.getIdKontrak());
+                showWarningMessage(String.format(
+                    "Tanggal pembayaran tidak valid.\nMinimal tanggal: %s", minDate));
+                return;
             }
+
+            // Process payment
+            boolean success = instalmentController.addInstalment(
+                selectedContract.getIdKontrak(), 
+                amount, 
+                tenor, 
+                paymentDate, 
+                currentUser.getId_user());
+
+            if (success) {
+                showSuccessMessage("Cicilan berhasil dibayar.");
+                refreshData();
+            } else {
+                showErrorMessage("Gagal menyimpan cicilan. Silakan coba lagi.");
+            }
+
+        } catch (DateTimeParseException e) {
+            showWarningMessage("Format tanggal tidak valid. Gunakan format YYYY-MM-DD.");
         } catch (Exception e) {
-            JOptionPane.showMessageDialog(this, 
-                "Input tidak valid. Pastikan tanggal dalam format YYYY-MM-DD.");
+            showErrorMessage("Error memproses pembayaran: " + e.getMessage());
         }
     }
 
     private void clearSelection() {
-        kontrakTable.clearSelection();
-        selectedKontrak = null;
-        labelKontrakTerpilih.setText("Belum ada kontrak dipilih");
-        labelJumlahCicilan.setText("-");
-        labelTenorSelanjutnya.setText("-");
-        inputTanggal.setText(LocalDate.now().toString());
-        buttonBayar.setEnabled(false);
-        cicilanTableModel.setRowCount(0);
-    }
-    
-
-    public void refreshKontrakData() {
-        loadKontrakData();
+        contractTable.clearSelection();
+        selectedContract = null;
+        selectedContractLabel.setText("Belum ada kontrak dipilih");
+        paymentAmountLabel.setText("-");
+        nextTenorLabel.setText("-");
+        dateField.setText(LocalDate.now().toString());
+        payButton.setEnabled(false);
+        
+        if (instalmentTableModel != null) {
+            instalmentTableModel.setRowCount(0);
+        }
     }
 
+    private void refreshData() {
+        loadContractData();
+        if (selectedContract != null) {
+            loadInstalmentData(selectedContract.getIdKontrak());
+            selectedContract = contractController.getKontrakById(selectedContract.getIdKontrak());
+            updateContractSelection();
+        }
+    }
 
     @Override
     public void setVisible(boolean visible) {
         super.setVisible(visible);
-        if (visible) {
-            loadKontrakData(); // Auto refresh saat panel ditampilkan
+        if (visible && contractTableModel != null) {
+            refreshData();
         }
+    }
+
+    // Utility methods for messages
+    private void showSuccessMessage(String message) {
+        JOptionPane.showMessageDialog(this, message, "Sukses", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private void showWarningMessage(String message) {
+        JOptionPane.showMessageDialog(this, message, "Peringatan", JOptionPane.WARNING_MESSAGE);
+    }
+
+    private void showErrorMessage(String message) {
+        JOptionPane.showMessageDialog(this, message, "Error", JOptionPane.ERROR_MESSAGE);
     }
 }
