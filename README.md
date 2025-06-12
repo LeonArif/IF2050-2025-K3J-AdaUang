@@ -82,7 +82,7 @@ AdaUang adalah suatu sistem untuk membantu perusahaan dalam mencatat kontrak pin
 | `fullname` | varchar(100) | Nama lengkap pengguna |
 | `password` | varchar(255) | Password terenkripsi |
 | `branch` | varchar(50) | Cabang/lokasi kerja |
-| `role` | varchar(20) | Role pengguna (admin, staff, etc.) |
+| `role` | varchar(20) | Role pengguna (admin, staff, manajemen perusahaan) |
 
 ### 2. Tabel `kontrak`  
 | Kolom | Tipe Data | Keterangan |
@@ -106,5 +106,5 @@ AdaUang adalah suatu sistem untuk membantu perusahaan dalam mencatat kontrak pin
 | `tenor` | int | Cicilan ke-n |
 | `jumlah_cicilan` | int | Nominal cicilan |
 | `tanggal_cicilan` | date | Tanggal jatuh tempo cicilan |
-| `id_staff` | int | FOREIGN KEY ke tabel users (staff yang handle) |
+| `id_staff` | int | FOREIGN KEY ke tabel users |
 
